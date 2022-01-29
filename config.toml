@@ -1,0 +1,33 @@
+concurrent = 1
+check_interval = 0
+
+[[runners]]
+  name = "Another Docker Runner"
+  url = "https://gitlab2.atp-fivt.org/"
+  token = "Ay_zzSBuqUWSmL8DsaWU"
+  executor = "docker"
+  [runners.custom_build_dir]
+  [runners.cache]
+    [runners.cache.s3]
+    [runners.cache.gcs]
+    [runners.cache.azure]
+  [runners.docker]
+    tls_verify = false
+    image = "docker:latest"
+    privileged = true
+    disable_entrypoint_overwrite = false
+    oom_kill_disable = false
+    disable_cache = false
+    volumes = ["/var/run/docker.sock:/var/run/docker.sock", "/cache"]
+    shm_size = 0
+
+[[runners]]
+  name = "My shell Runner"
+  url = "https://gitlab2.atp-fivt.org/"
+  token = "hfD4-VTpq1JXtHQPdBbP"
+  executor = "shell"
+  [runners.custom_build_dir]
+  [runners.cache]
+    [runners.cache.s3]
+    [runners.cache.gcs]
+    [runners.cache.azure]

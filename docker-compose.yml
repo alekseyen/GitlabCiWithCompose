@@ -1,0 +1,28 @@
+version: '3.5'
+
+services:
+  fastapi_app:
+    container_name: fastapi_app
+    image: gitlab2.atp-fivt.org:5050/tpos2021/podkidysheval-practice:latest
+    build:
+      context: './url_shortener_app'
+    command: >
+      bash -c  "cd url_shortener && python -m uvicorn url_shortener:app --port 8003 --host 0.0.0.0"
+    ports:
+      - "8003:8003"
+    networks:
+      - net
+
+  curl_container:
+    image: gitlab2.atp-fivt.org:5050/tpos2021/podkidysheval-practice/simple_curl_cont:latest
+    container_name: curl_container
+    build:
+      context: './curl_container'
+    depends_on:
+      - fastapi_app
+    networks:
+      - net
+
+networks:
+  net:
+    driver: bridge

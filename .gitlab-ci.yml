@@ -1,0 +1,162 @@
+# Не рабочая версия: https://pastebin.com/XXSxvUm7 (два контейнера не могут общаться с друг другом)
+
+stages:
+  - small_test
+  - build_containers
+  - medium_test
+  - build_wheel
+  - release
+  - deploy
+
+before_script:
+  - cat /etc/os-release
+
+check if files exist:
+  stage: small_test
+  image: gitlab2.atp-fivt.org:5050/tpos2021/podkidysheval-practice:latest
+  script:
+    - head url_shortener_app/url_shortener/test_public.py
+    - head url_shortener_app/url_shortener/url_shortener.py
+  only:
+    - main
+    - dev
+    - merge_requests
+
+unit test run:
+  stage: small_test
+  image: gitlab2.atp-fivt.org:5050/tpos2021/podkidysheval-practice:latest
+  tags:
+    - another-docker
+  script:
+    - pwd && ls
+    - cd / && ls -l
+    - pytest url_shortener
+  only:
+    - main
+    - dev
+    - merge_requests
+
+build containers:
+  stage: build_containers
+  image: docker:latest
+  services:
+    - docker:dind
+  tags:
+    - another-docker
+  script:
+    - docker info
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CI_REGISTRY/tpos2021/$CI_PROJECT_NAME:latest url_shortener_app
+    - docker build -t $CI_REGISTRY/tpos2021/$CI_PROJECT_NAME/simple_curl_cont:latest curl_container
+    - docker push $CI_REGISTRY/tpos2021/$CI_PROJECT_NAME:latest # mb bad practice use tpos2021
+    - docker push $CI_REGISTRY/tpos2021/$CI_PROJECT_NAME/simple_curl_cont:latest # mb bad practice use tpos2021
+  only:
+    - main
+    - dev
+    - merge_requests
+
+medium test run app:
+  image: docker/compose
+  services:
+    - docker:dind
+  stage: medium_test
+  tags:
+    - another-docker
+  script:
+    - docker info
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker pull gitlab2.atp-fivt.org:5050/tpos2021/podkidysheval-practice:latest
+    - docker pull gitlab2.atp-fivt.org:5050/tpos2021/podkidysheval-practice/simple_curl_cont:latest
+    - docker-compose up --exit-code-from curl_container && docker-compose rm -fsv || 307
+  only:
+    - main
+    - dev
+    - merge_requests
+
+create_package:
+  image: alpine:latest
+  stage: build_wheel
+  tags:
+    - another-docker
+  script:
+    - echo $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - tar -czvf url_shortener_app.tar.gz url_shortener_app
+  artifacts:
+    expire_in: 7 days
+    paths:
+      - url_shortener_app.tar.gz
+  only:
+    - main
+    - merge_requests
+
+release_job:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs:
+    - job: create_package
+      artifacts: true
+  tags:
+    - another-docker
+  release:
+    name: 'Release Executables ${CI_COMMIT_SHORT_SHA}'
+    description: 'Created using the release-cli'
+    tag_name: '$CI_COMMIT_SHORT_SHA'
+  script:
+    - echo "releasing our package"
+  when: manual
+  only:
+    - main
+    - merge_requests
+
+.sshpass_install: &sshpass_install
+  - su -l root
+  - apk add sudo
+  - apk add sshpass
+  - apk add --update openssh
+
+deploy wheel to machines:
+  image: cytopia/ansible:latest
+  stage: deploy
+  dependencies:
+    - create_package
+  needs:
+    - job: create_package
+      artifacts: true
+  before_script: *sshpass_install
+  tags:
+    - another-docker
+  script:
+    - tar -zxvf url_shortener_app.tar.gz
+    - mv url_shortener_app ansible/url_shortener_app
+    - cd ansible
+    - chmod o-w .
+    - pwd && ls -l
+    - ansible all -i hosts --list-hosts
+#    - ansible all -m ping -i hosts
+    - ansible-playbook deploy_playbook.yml -v --extra-vars "ansible_password=${HOST_PASS}"
+  only:
+    - main
+    - merge_requests
+
+after deploy check:
+  image: alpine
+  stage: deploy
+  needs:
+    - job: deploy wheel to machines
+  tags:
+    - another-docker
+  script:
+    - apk update
+    - apk upgrade
+    - apk add curl
+    - >-
+      curl -X 'POST' \
+        '51.250.28.159:8003/shorten' \
+        -H 'accept: application/json' \
+        -H 'Content-Type: application/json' \
+        -d '{
+        "url": "http://google.com"
+      }'
+  only:
+    - main
+    - merge_requests

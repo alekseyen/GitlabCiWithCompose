@@ -1,0 +1,47 @@
+---
+# Coping
+- hosts: ya_cloud_machines
+  tasks:
+    - copy:
+        src: url_shortener_app
+        dest: ~/
+
+# Install pip
+- hosts: ya_cloud_machines
+  become: yes
+  become_method: sudo
+  tasks:
+  - name: install packages
+    apt: name={{item}} state=latest
+    with_items:
+      - python3-pip
+      - python3-dev
+      - python3.9
+      - python3-virtualenv
+
+# Install requirements
+- hosts: ya_cloud_machines
+  tasks:
+  - name: install modules in a virtualenv
+    pip:
+      requirements: ~/url_shortener_app/requirements.txt
+      virtualenv: /home/alekseyen/venv/py39
+      virtualenv_python: python3.9
+
+# Kill previous instance
+- hosts: ya_cloud_machines
+  tasks:
+    - name: kill app
+      shell: "kill $(ps aux | grep '[u]rl_shortener:app' | awk '{print $2}')"
+      ignore_errors: yes
+
+# Run app (of course it's should be nginx service, but for learning just gunicorn)
+- hosts: ya_cloud_machines
+  environment:
+    PATH: '{{ ansible_env.HOME }}/venv/py39/bin/:{{ ansible_env.PATH }}'
+  tasks:
+  - name: run app
+    shell: "cd url_shortener_app/url_shortener && gunicorn url_shortener:app --bind 0.0.0.0:8003 -k uvicorn.workers.UvicornWorker -D --capture-output --error-logfile gunicorn_errors.txt"
+    # comamnd to kill app:
+    # kill $(ps aux | grep '[u]rl_shortener:app' | awk '{print $2}')
+

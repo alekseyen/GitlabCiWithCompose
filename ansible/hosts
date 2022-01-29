@@ -1,0 +1,7 @@
+[ya_cloud_machines]
+51.250.28.159 ansible_user=alekseyen
+
+[ya_cloud_machines:vars]
+ansible_connection=ssh
+ansible_ssh_user=alekseyen
+app_name=fast-api-app
