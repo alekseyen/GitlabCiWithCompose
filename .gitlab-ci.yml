@@ -1,5 +1,3 @@
-# Не рабочая версия: https://pastebin.com/XXSxvUm7 (два контейнера не могут общаться с друг другом)
-
 stages:
   - small_test
   - build_containers
